@@ -1,5 +1,6 @@
 
 import AboutSection from "@/component/AboutSection";
+import FrameRevealSection from "@/component/FrameRevealSection";
 import Navbar from "@/component/Navbar";
 import Preloader from "@/component/Preloader";
 import ScrollVideoReveal from "@/component/ScrollVideoReveal";
@@ -12,6 +13,8 @@ export default function Home() {
       <Navbar/>
       <ScrollVideoReveal/>
       <AboutSection/>
+      
+      <FrameRevealSection/>
       
 
     </div>

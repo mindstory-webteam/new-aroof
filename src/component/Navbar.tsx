@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 /**
  * Navbar
@@ -16,6 +16,8 @@ import React, { useEffect, useState } from "react";
  *   so the logo stays optically centered regardless of how many links each side has.
  * - Scroll state: once the user scrolls past SCROLL_THRESHOLD px, the background
  *   transitions from clear glass to solid white and the text flips to dark.
+ * - Auto-hide: scrolling down hides the bar (slides up and out); scrolling up
+ *   reveals it again. Near the very top of the page it's always shown.
  *
  * SETUP
  * -----
@@ -37,6 +39,14 @@ const LOGO_DARK = "/logo/logo.png";
 // Pixels of scroll before the bar switches to its solid white state.
 const SCROLL_THRESHOLD = 60;
 
+// Pixels of scroll-up-from-the-top before the auto-hide behavior kicks in at all.
+// Below this, the bar always stays visible (so it doesn't flicker right at the top).
+const HIDE_START_OFFSET = 80;
+
+// Minimum scroll delta (px) required before we react — avoids jitter from
+// trackpad micro-scrolls or momentum scrolling.
+const SCROLL_DELTA_THRESHOLD = 6;
+
 type NavLink = { label: string; href: string };
 
 const LEFT_LINKS: NavLink[] = [
@@ -53,14 +63,56 @@ const RIGHT_LINKS: NavLink[] = [
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Tracks the last scrollY we reacted to, so we can compute direction.
+  const lastScrollY = useRef(0);
+  const ticking = useRef(false);
+
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > SCROLL_THRESHOLD);
-    onScroll(); // handle a page loaded already scrolled (refresh mid-page)
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+    lastScrollY.current = window.scrollY;
+
+    const handleScroll = () => {
+      if (ticking.current) return;
+      ticking.current = true;
+
+      window.requestAnimationFrame(() => {
+        const currentY = window.scrollY;
+
+        setScrolled(currentY > SCROLL_THRESHOLD);
+
+        // Always show the bar near the top, regardless of direction.
+        if (currentY < HIDE_START_OFFSET) {
+          setHidden(false);
+        } else {
+          const delta = currentY - lastScrollY.current;
+
+          if (Math.abs(delta) > SCROLL_DELTA_THRESHOLD) {
+            if (delta > 0) {
+              // Scrolling down -> hide
+              setHidden(true);
+            } else {
+              // Scrolling up -> show
+              setHidden(false);
+            }
+            lastScrollY.current = currentY;
+          }
+        }
+
+        ticking.current = false;
+      });
+    };
+
+    handleScroll(); // handle a page loaded already scrolled (refresh mid-page)
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
+
+  // Never stay hidden while the mobile menu is open.
+  useEffect(() => {
+    if (menuOpen) setHidden(false);
+  }, [menuOpen]);
 
   // Lock body scroll while the mobile panel is open
   useEffect(() => {
@@ -77,7 +129,7 @@ export default function Navbar() {
           position: fixed;
           top: 18px;
           left: 50%;
-          transform: translateX(-50%);
+          transform: translateX(-50%) translateY(0);
           width: calc(100% - 40px);
           max-width: 1240px;
           z-index: 1000;
@@ -88,7 +140,7 @@ export default function Navbar() {
             box-shadow 0.35s ease,
             border-color 0.35s ease,
             top 0.35s ease,
-            transform 0.35s ease;
+            transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 
           /* Glass (default, over the hero) */
           background: rgba(255, 255, 255, 0.08);
@@ -106,6 +158,13 @@ export default function Navbar() {
           backdrop-filter: none;
           -webkit-backdrop-filter: none;
           box-shadow: 0 10px 34px rgba(0, 0, 0, 0.12);
+        }
+
+        /* Hidden: slides up and out of view. Combined with the existing
+           translateX(-50%) centering so the bar stays horizontally centered
+           while it animates away. */
+        .nav-wrap.nav-hidden {
+          transform: translateX(-50%) translateY(-160%);
         }
 
         .nav-inner {
@@ -233,7 +292,11 @@ export default function Navbar() {
         }
       `}</style>
 
-      <header className={`nav-wrap${scrolled ? " scrolled" : ""}`}>
+      <header
+        className={`nav-wrap${scrolled ? " scrolled" : ""}${
+          hidden ? " nav-hidden" : ""
+        }`}
+      >
         <nav className="nav-inner">
           {/* LEFT: links on desktop, empty spacer on mobile so the logo stays centered */}
           <div className="nav-links left">
