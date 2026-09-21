@@ -2,61 +2,6 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
-/**
- * Preloader
- * ---------
- * A full-screen brand intro that runs once while the page loads. Re-themed to
- * match the hero section it hands off to: the ScrollVideoReveal section opens
- * on a moody, overcast, storm-cloud video ("Built For Storms"), muted grey-blue
- * rather than a bright clean sky — so this panel uses the SAME desaturated
- * palette, sampled straight from that hero frame, instead of a saturated
- * postcard-blue gradient. The brand blue (#116AB1, the exact colour of the
- * icon square) is kept ONLY as an accent — the rule under the tagline, the
- * progress bar, the soft ring glow — so it still pops without fighting the
- * muted backdrop.
- *
- * Sequence:
- *   1. ICON GROWS     — the square a.roof mark pops in large and centred, with a
- *                        spring overshoot.
- *   2. SHRINK + SHIFT — the icon shrinks down to its normal size. Because it sits
- *                        in a centred flex row next to the (currently collapsed)
- *                        wordmark, shrinking the icon and expanding the wordmark's
- *                        box at the same time naturally pushes the icon left —
- *                        no manual transform needed, it falls out of the layout.
- *   3. WORDMARK REVEAL — "a.roof" wipes in left-to-right via a clip-path curtain
- *                        (not typed letter by letter), landing the same moment
- *                        the icon settles into its small size. Rendered in white,
- *                        same as the live navbar logo over the video.
- *   4. TAGLINE         — "uPVC Roofing sheets" fades up underneath, with a
- *                        hairline brand-blue rule drawing out from centre.
- *   5. PROGRESS        — a thin bar tracks real asset loading (never fakes 100%:
- *                        eases toward whatever has actually loaded, snaps full on
- *                        window `load`).
- *   6. EXIT             — IRIS WIPE. The panel is clipped to a circle centred on
- *                        the icon; on exit that circle shrinks to a point, so the
- *                        hero video is revealed from the outer edges inward,
- *                        closing in on the mark last.
- *
- * It will not disappear before MIN_DURATION_MS even on a warm cache, so the brand
- * beat always plays — but it also won't hold the page hostage past MAX_DURATION_MS
- * if something on the page is slow or broken.
- *
- * SETUP
- * -----
- * 1. Copy the square icon to `public/logo/icon.png` (transparent PNG/SVG works
- *    best). Same file the hero section's watermark uses.
- * 2. Font is Poppins, matching the wordmark's geometric sans. Move the @import
- *    into your global stylesheet or next/font for production.
- * 3. Render it once at the very top of your layout, above the hero:
- *
- *      // app/layout.tsx
- *      <Preloader />
- *      <Navbar />
- *      {children}
- *
- *    Optionally pass onComplete to kick off hero animations only after the
- *    preloader clears:  <Preloader onComplete={() => setHeroReady(true)} />
- */
 
 const ICON_PATH = "/logo/icon.png";
 

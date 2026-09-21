@@ -6,7 +6,63 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
-
+/**
+ * RoofHeroSection — sky video, ghosted heading, cut-out house, key line
+ * ---------------------------------------------------------------------
+ *
+ *   ┌───────────────────────── full bleed, 100svh ─────────────────────────┐
+ *   │                    (sky video plays behind everything)                │
+ *   │                                                                       │
+ *   │            R O O F I N G      ← translucent word in the sky           │
+ *   │                 ╱‾‾‾‾‾‾‾‾‾╲     (the roof peak overlaps it)          │
+ *   │           ╱‾‾‾‾╱  ▯▯  ▯▯   ╲‾‾‾‾╲                                    │
+ *   │        ╱‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾╲     ← cut-out house PNG         │
+ *   │  small line of copy    A ROOF THAT                                    │
+ *   │  (bottom left)         OUTLASTS EVERY MONSOON   ← on a dark fade      │
+ *   └───────────────────────────────────────────────────────────────────────┘
+ *
+ * No navbar and no buttons — just the scene and the headline.
+ *
+ * LAYERS, BOTTOM TO TOP
+ * ---------------------
+ * 1. Sky video (`.roof-sky`), with a flat blue behind it while it loads.
+ * 2. Ghost word. A gradient clipped to the text, so it reads as frosted glass
+ *    that fades toward the bottom of each letter.
+ * 3. The house, a transparent PNG, sized by HOUSE_WIDTH in the Layout block.
+ *    It is set slightly wider than the section and slightly below its bottom
+ *    edge, so the PNG's transparent margin and rounded corners are cropped
+ *    off. A solid dark ground strip sits behind it as a safety net.
+ * 4. A dark fade rising from the bottom edge, so the roof melts into the
+ *    ground and the headline is always legible.
+ * 5. The copy.
+ *
+ * MOTION
+ * ------
+ * One entrance: the ghost word settles, the house rises, the headline pushes
+ * up out of its mask, the small line fades in. After that, only the cursor
+ * moves anything: the house drifts a little and the ghost word drifts the
+ * opposite way, which is what gives the scene depth. Both are skipped for
+ * touch devices and prefers-reduced-motion.
+ *
+ * BACKGROUND VIDEO
+ * ----------------
+ * Driven from JS for the same reasons as the product section: `muted` has to
+ * be a DOM property before play(), play() can reject, and a wrong path fails
+ * silently. The bundled sky-hero.mp4 is 1080p and loops seamlessly (its last
+ * second cross-fades into its first).
+ *
+ * SETUP
+ * -----
+ * 1. `npm i gsap`
+ * 2. Copy `sky-hero.mp4` to `public/video/` and `roof-house.png` to
+ *    `public/images/`, or change the two paths below.
+ * 3. Edit the words in the Content block.
+ * 4. To resize the house, change HOUSE_WIDTH (desktop) and
+ *    HOUSE_WIDTH_MOBILE in the Layout block, and HOUSE_LIFT to raise or lower
+ *    it. If the roof peak no longer lines up with the ghost word, move the
+ *    word with GHOST_TOP.
+ * 5. Move the font @import to your global stylesheet for production.
+ */
 
 /* ── Content ─────────────────────────────────────────────────────────────── */
 
@@ -46,14 +102,20 @@ const DRIFT_DURATION = 1.1;
 const PAD_X = "clamp(24px, 5vw, 96px)";
 const PAD_BOTTOM = "clamp(28px, 4vw, 64px)";
 
-// House size, as a share of the section width. 100% = edge to edge.
-// Smaller number = smaller house, larger number = cropped at both sides.
-const HOUSE_WIDTH = "100%"; // desktop and tablet
+// House size, as a share of the section width. 100% = exactly edge to edge.
+// The PNG has a thin transparent margin and rounded corners, so it is set a
+// little over 100% to push those edges off screen. Lower it to shrink the
+// house, raise it to crop more of the sides.
+const HOUSE_WIDTH = "104%"; // desktop and tablet
 const HOUSE_WIDTH_MOBILE = "140%"; // screens 900px wide and under
 
-// How far the house sits above the bottom edge, as a share of the section
-// height. 0% = resting on the bottom. Raise it to lift the house higher.
-const HOUSE_LIFT = "3%";
+// Where the bottom of the house sits, as a share of the section height.
+// A NEGATIVE value pushes the house below the bottom edge, which crops the
+// PNG's rounded bottom edge so no gap shows under the roof. It also leaves
+// room for the cursor drift to move the house without revealing anything.
+// If a gap still shows, make it more negative (e.g. "-7%"). If too much of the
+// roof is cut off, bring it closer to 0%.
+const HOUSE_LIFT = "-4%";
 
 // Where the ghost word sits from the top. Raise it to move the word lower.
 const GHOST_TOP = "9%";
@@ -260,6 +322,19 @@ export default function RoofHeroSection() {
           -webkit-text-stroke: 1px rgba(255, 255, 255, 0.28);
         }
 
+        /* Solid ground behind the house. If any sliver of the PNG's margin ever
+           shows at the foot of the scene, it shows dark ground, not sky. */
+        .roof-ground {
+          position: absolute;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          height: 16%;
+          z-index: 1;
+          pointer-events: none;
+          background: rgb(${NIGHT});
+        }
+
         /* ---- 3. The house ----
            Sized by --house-w and centred with a negative margin, not a
            transform, so the cursor drift owns the only transform on it. */
@@ -391,6 +466,8 @@ export default function RoofHeroSection() {
       <div className="roof-ghost-drift" aria-hidden="true">
         <p className="roof-ghost">{GHOST_WORD}</p>
       </div>
+
+      <div className="roof-ground" aria-hidden="true" />
 
       <div className="roof-house-drift">
         {imageFailed ? null : (
