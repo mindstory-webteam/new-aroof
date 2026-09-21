@@ -658,7 +658,7 @@ export default function AboutSectionLedger() {
             </span>
           </h2>
 
-          {SHOW_STAR && (
+          {/* {SHOW_STAR && (
             <svg
               ref={starRef}
               className="abt5-star"
@@ -671,7 +671,7 @@ export default function AboutSectionLedger() {
                 fill={STAR_COLOR}
               />
             </svg>
-          )}
+          )} */}
 
           {SHOW_HEAD_RULE && <span className="abt5-head-rule" ref={headRuleRef} />}
           {META && <span className="abt5-meta">{META}</span>}
@@ -698,15 +698,15 @@ export default function AboutSectionLedger() {
               </div>
             </figure>
 
-            {INSET_IMAGE && (
+            {/* {INSET_IMAGE && (
               <div className="abt5-inset abt5-wipe" data-wipe="left" data-delay="0.35">
                 <div className="abt5-wipe-inner">{shot(INSET_IMAGE, "inset")}</div>
               </div>
-            )}
+            )} */}
 
-            <p className="abt5-caption">
+            {/* <p className="abt5-caption">
               The pressing floor, where every coil is checked before it is cut.
-            </p>
+            </p> */}
           </div>
 
           {/* Right: the narrative and the figures */}
