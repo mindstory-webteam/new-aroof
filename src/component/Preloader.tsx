@@ -1,443 +1,382 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { gsap } from "gsap";
 
+/**
+ * Preloader — a roof that builds itself, then lifts off the hero
+ * ------------------------------------------------------------------------------
+ *
+ *                          ╱‾‾‾‾‾‾‾‾‾‾‾╲          ← the roof line draws first
+ *                        ╱               ╲
+ *                       A ROOF                     ← the word fills from the
+ *                       ───────────────────          bottom up as things load
+ *                       UPVC roofing sheets  64%   ← ground line, label, count
+ *
+ * It is one small idea: a house. The roof line draws itself, the word fills
+ * up from the ground as the page really loads, and when it is done the whole
+ * panel lifts away with a gable-shaped edge, like a roof being raised, to
+ * reveal the hero underneath.
+ *
+ * Same palette and fonts as the hero, product, FAQ, CTA and footer sections.
+ *
+ * LOADING
+ * -------
+ * The number is real. It follows how many images and videos on the page are
+ * ready, and it holds at 90% until the browser's own `load` event. It never
+ * jumps to 100% on a timer. Two limits keep it well behaved:
+ *   - MIN_DURATION_MS: it never leaves before the drawing has finished, even
+ *     on a warm cache, so the beat always plays.
+ *   - MAX_DURATION_MS: it never holds the page hostage. If something is slow
+ *     or broken, it lets go and shows the site anyway.
+ *
+ * MOTION
+ * ------
+ * Progress is painted straight to the DOM from one animation frame loop, so
+ * the page does not re-render 60 times a second. The exit is one GSAP
+ * timeline. For prefers-reduced-motion the exit is a plain fade.
+ *
+ * SETUP
+ * -----
+ * 1. `npm i gsap`
+ * 2. Render it once at the very top of your layout, above everything else:
+ *
+ *      // app/layout.tsx
+ *      <Preloader />
+ *      {children}
+ *
+ * 3. Edit WORD and TAGLINE below.
+ * 4. When it finishes it calls `onComplete` and also fires a `preloader:done`
+ *    event on window, so other sections can wait for it if they need to.
+ * 5. Move the font @import to your global stylesheet for production.
+ */
 
-const ICON_PATH = "/logo/icon.png";
+/* ── Content ─────────────────────────────────────────────────────────────── */
 
-// Palette sampled from the actual hero frame — overcast, desaturated blue-grey
-// easing into a warmer light grey-lavender near the bottom, not a clean sky.
-const STORM_DARK = "#48536C"; // top, matches the darkest part of the video sky
-const STORM_MID = "#6E7C99";
-const STORM_LOW = "#8F9099";
-const STORM_LIGHT = "#ACA9AE"; // bottom, the misty pale-grey haze low in the frame
+const WORD = "A ROOF";
+const TAGLINE = "UPVC roofing sheets";
 
-// Brand blue — the exact colour of the icon square — reserved as an accent only.
-const BRAND_BLUE = "#116AB1";
+/* ── Palette (shared with the other sections) ────────────────────────────── */
 
-const INK = "#FFFFFF"; // wordmark colour — matches the live navbar logo, white on the video
-const INK_MUTED = "rgba(255, 255, 255, 0.78)"; // tagline / secondary text
+const NIGHT_TOP = "#04090f";
+const NIGHT_BOTTOM = "#0d2233";
+const SKY_LIGHT = "#a9dcf5";
 
-const WORDMARK = "a.roof";
-const TAGLINE = "uPVC Roofing sheets";
+/* ── Timing ──────────────────────────────────────────────────────────────── */
 
-const ICON_HOLD_MS = 900; // how long the big icon holds alone before shrinking
-const REVEAL_DURATION_MS = 750; // must match the CSS transition durations below
-const TAGLINE_DELAY_MS = 250; // gap after the wordmark lands before tagline fades in
-const MIN_DURATION_MS = 2800; // brand beat always plays in full
-const MAX_DURATION_MS = 8000; // hard ceiling if loading stalls
-const EXIT_DURATION_MS = 1000;
+const MIN_DURATION_MS = 2400; // the drawing always plays in full
+const MAX_DURATION_MS = 7000; // hard ceiling if loading stalls
 
-type Stage = "grow" | "reveal" | "tagline";
+// Height of the gable on the exit edge, as a share of the screen height.
+const PEAK = 16;
 
 type PreloaderProps = {
   onComplete?: () => void;
 };
 
 export default function Preloader({ onComplete }: PreloaderProps) {
-  const [stage, setStage] = useState<Stage>("grow");
-  const [progress, setProgress] = useState(0); // 0–1, real load progress
-  const [exiting, setExiting] = useState(false);
   const [gone, setGone] = useState(false);
 
-  const mountedAtRef = useRef(Date.now());
+  const panelRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const roofRef = useRef<SVGPathElement>(null);
+  const fillRef = useRef<HTMLSpanElement>(null);
+  const countRef = useRef<HTMLSpanElement>(null);
+
+  const shownRef = useRef(0); // progress currently painted, 0 to 1
   const finishedRef = useRef(false);
+  const tlRef = useRef<gsap.core.Timeline | null>(null);
+  const onCompleteRef = useRef(onComplete);
 
-  /* --------------------------------------------------------- stage timeline */
   useEffect(() => {
-    const t1 = setTimeout(() => setStage("reveal"), ICON_HOLD_MS);
-    const t2 = setTimeout(
-      () => setStage("tagline"),
-      ICON_HOLD_MS + REVEAL_DURATION_MS + TAGLINE_DELAY_MS
-    );
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
+    onCompleteRef.current = onComplete;
+  });
+
+  /* Paint one progress value (0 to 1) to the three things that show it. The
+     roof line finishes early (first 30%), the word fills across the whole run. */
+  const paint = useCallback((p: number) => {
+    const v = Math.min(1, Math.max(0, p));
+    shownRef.current = v;
+    if (roofRef.current) roofRef.current.style.strokeDashoffset = String(1 - Math.min(1, v / 0.3));
+    if (fillRef.current) fillRef.current.style.clipPath = `inset(${(1 - v) * 100}% 0 0 0)`;
+    if (countRef.current) countRef.current.textContent = `${Math.round(v * 100)}%`;
   }, []);
 
-  /* ------------------------------------------------- real load progress */
-  useEffect(() => {
-    // Count how many images/videos on the page have finished, so the bar
-    // reflects something real rather than a scripted fake.
-    const countAssets = () => {
-      const media = Array.from(
-        document.querySelectorAll("img, video")
-      ) as (HTMLImageElement | HTMLVideoElement)[];
-      if (media.length === 0) return 1;
-      const ready = media.filter((el) =>
-        el instanceof HTMLImageElement ? el.complete : el.readyState >= 3
-      ).length;
-      return ready / media.length;
-    };
-
-    const tick = setInterval(() => {
-      setProgress((prev) => {
-        const target = Math.max(countAssets(), prev);
-        // Ease toward the target so the bar glides instead of jumping
-        return prev + (target - prev) * 0.15;
-      });
-    }, 120);
-
-    const onLoad = () => setProgress(1);
-    if (document.readyState === "complete") onLoad();
-    else window.addEventListener("load", onLoad);
-
-    return () => {
-      clearInterval(tick);
-      window.removeEventListener("load", onLoad);
-    };
-  }, []);
-
-  /* ------------------------------------------------------------- dismissal */
+  /* Exit: finish the fill, fade the content up, then lift the panel with a
+     gable-shaped bottom edge. Runs once. */
   const finish = useCallback(() => {
     if (finishedRef.current) return;
     finishedRef.current = true;
-    setExiting(true);
-    setTimeout(() => {
+
+    const done = () => {
       setGone(true);
-      onComplete?.();
-    }, EXIT_DURATION_MS);
-  }, [onComplete]);
+      onCompleteRef.current?.();
+      window.dispatchEvent(new Event("preloader:done"));
+    };
 
-  useEffect(() => {
-    const elapsed = Date.now() - mountedAtRef.current;
-    const ready = progress > 0.99 && stage === "tagline";
-
-    if (ready) {
-      const wait = Math.max(MIN_DURATION_MS - elapsed, 400);
-      const t = setTimeout(finish, wait);
-      return () => clearTimeout(t);
+    const panel = panelRef.current;
+    const content = contentRef.current;
+    if (!panel || !content) {
+      done();
+      return;
     }
-  }, [progress, stage, finish]);
 
-  // Hard ceiling — never trap the user behind a stuck loader
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const prog = { p: shownRef.current };
+    const edge = { b: 100 + PEAK }; // y of the panel's bottom corners, in %
+
+    const tl = gsap.timeline({ onComplete: done });
+    tlRef.current = tl;
+
+    // A short beat with the word completely filled.
+    tl.to(prog, { p: 1, duration: 0.3, ease: "power1.out", onUpdate: () => paint(prog.p) });
+
+    if (reduce) {
+      tl.to(panel, { opacity: 0, duration: 0.5, ease: "power1.out" }, "+=0.1");
+      return;
+    }
+
+    tl.to(content, { y: -28, opacity: 0, duration: 0.45, ease: "power2.in" }, "+=0.2").to(
+      edge,
+      {
+        b: 0,
+        duration: 1.05,
+        ease: "power3.inOut",
+        onUpdate: () => {
+          // The bottom edge is a gable: the middle sits PEAK% higher than the
+          // corners, so the hero shows through in a roof-shaped window.
+          panel.style.clipPath = `polygon(0% 0%, 100% 0%, 100% ${edge.b}%, 50% ${
+            edge.b - PEAK
+          }%, 0% ${edge.b}%)`;
+        },
+      },
+      "<+0.1"
+    );
+  }, [paint]);
+
+  /* Real load progress, painted from one animation frame loop. */
   useEffect(() => {
-    const t = setTimeout(finish, MAX_DURATION_MS);
-    return () => clearTimeout(t);
-  }, [finish]);
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const minMs = reduce ? 700 : MIN_DURATION_MS;
 
-  // Lock scrolling while the panel is up
+    // How much of the page's media is ready. Lazy images are left out, because
+    // they may never load until they scroll into view.
+    const measure = () => {
+      const media = Array.from(
+        document.querySelectorAll<HTMLImageElement | HTMLVideoElement>(
+          'img:not([loading="lazy"]), video'
+        )
+      );
+      const ready = media.filter((el) =>
+        el instanceof HTMLImageElement ? el.complete : el.readyState >= 3 || !!el.error
+      ).length;
+      const ratio = media.length ? ready / media.length : 1;
+      // Hold at 90% until the browser says the page has loaded.
+      return document.readyState === "complete" ? ratio : Math.min(ratio, 0.9);
+    };
+
+    paint(0);
+
+    const t0 = performance.now();
+    let last = t0;
+    let lastMeasure = -Infinity;
+    let real = 0;
+    let shown = 0;
+    let raf = 0;
+    let stopped = false;
+
+    const loop = (now: number) => {
+      if (stopped) return;
+      const dt = Math.min(now - last, 64);
+      last = now;
+
+      if (now - lastMeasure > 150) {
+        real = measure();
+        lastMeasure = now;
+      }
+
+      const elapsed = now - t0;
+      // Never ahead of what has really loaded, never ahead of the minimum run.
+      const target = Math.min(real, elapsed / minMs);
+      shown += (target - shown) * (1 - Math.pow(0.9, dt / 16.7));
+      if (target - shown < 0.0005) shown = target;
+      paint(shown);
+
+      if ((shown >= 0.999 && real >= 1 && elapsed >= minMs) || elapsed >= MAX_DURATION_MS) {
+        stopped = true;
+        finish();
+        return;
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(raf);
+    };
+  }, [paint, finish]);
+
+  /* Keep the page from scrolling while the panel is up, without letting the
+     layout jump when the scrollbar disappears. */
   useEffect(() => {
     if (gone) return;
-    document.body.style.overflow = "hidden";
+    const body = document.body;
+    const gap = window.innerWidth - document.documentElement.clientWidth;
+    const prev = { overflow: body.style.overflow, paddingRight: body.style.paddingRight };
+    body.style.overflow = "hidden";
+    if (gap > 0) body.style.paddingRight = `${gap}px`;
     return () => {
-      document.body.style.overflow = "";
+      body.style.overflow = prev.overflow;
+      body.style.paddingRight = prev.paddingRight;
     };
   }, [gone]);
 
+  useEffect(
+    () => () => {
+      tlRef.current?.kill();
+    },
+    []
+  );
+
   if (gone) return null;
 
-  const pct = Math.min(Math.round(progress * 100), 100);
-  const settled = stage !== "grow";
-  const taglineShown = stage === "tagline";
-
   return (
-    <div className={`pl-root${exiting ? " exiting" : ""}`} role="status" aria-live="polite">
+    <div className="pre-root" role="status" aria-live="polite">
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500&display=block');
 
-        .pl-root {
+        .pre-root {
           position: fixed;
           inset: 0;
           z-index: 9999;
-          pointer-events: auto;
         }
 
-        /* The whole visual — gradient, drifting mist, icon, wordmark, tagline,
-           progress bar — lives inside this one panel. It exits by clipping to a
-           shrinking circle centred on the icon, so the hero is revealed from
-           the outer edges inward, closing in on the mark last. */
-        .pl-panel {
+        /* The panel is what lifts away. It needs no clip-path until the exit. */
+        .pre-panel {
           position: absolute;
           inset: 0;
           overflow: hidden;
-          background: linear-gradient(
-            180deg,
-            ${STORM_DARK} 0%,
-            ${STORM_MID} 34%,
-            ${STORM_LOW} 66%,
-            ${STORM_LIGHT} 100%
-          );
-          clip-path: circle(100vmax at 50% 46%);
-          transition: clip-path ${EXIT_DURATION_MS}ms cubic-bezier(0.65, 0, 0.35, 1);
+          background: linear-gradient(180deg, ${NIGHT_TOP} 0%, ${NIGHT_BOTTOM} 100%);
+          color: #fff;
           will-change: clip-path;
         }
-        .pl-root.exiting .pl-panel {
-          clip-path: circle(0% at 50% 46%);
-        }
 
-        /* Soft, slow-drifting haze — pale, low-contrast, the way mist moves
-           across the actual hero footage. Deliberately understated rather than
-           bright, to match the overcast tone instead of a clean sky. */
-        @keyframes plDriftA {
-          0%   { transform: translate(-6%, -4%) scale(1); }
-          50%  { transform: translate(4%, 5%) scale(1.12); }
-          100% { transform: translate(-6%, -4%) scale(1); }
-        }
-        @keyframes plDriftB {
-          0%   { transform: translate(5%, 3%) scale(1.08); }
-          50%  { transform: translate(-4%, -6%) scale(1); }
-          100% { transform: translate(5%, 3%) scale(1.08); }
-        }
-
-        .pl-cloud {
-          position: absolute;
-          border-radius: 50%;
-          filter: blur(70px);
-          pointer-events: none;
-          will-change: transform;
-        }
-        .pl-cloud.a {
-          left: 6%;
-          top: 4%;
-          width: 60vmin;
-          height: 60vmin;
-          background: radial-gradient(circle, rgba(255, 255, 255, 0.22) 0%, transparent 70%);
-          animation: plDriftA 18s ease-in-out infinite;
-        }
-        .pl-cloud.b {
-          right: 4%;
-          bottom: 6%;
-          width: 66vmin;
-          height: 66vmin;
-          background: radial-gradient(circle, rgba(255, 255, 255, 0.16) 0%, transparent 70%);
-          animation: plDriftB 21s ease-in-out infinite;
-        }
-
-        /* Faint brand-blue wash behind the icon — the one saturated colour
-           allowed to bloom, since it's the actual brand colour, not scenery */
-        .pl-glow {
-          position: absolute;
-          left: 50%;
-          top: 46%;
-          width: 60vmin;
-          height: 60vmin;
-          transform: translate(-50%, -50%);
-          background: radial-gradient(circle, ${BRAND_BLUE}3D 0%, transparent 65%);
-          pointer-events: none;
-        }
-
-        .pl-content {
+        .pre-content {
           position: absolute;
           inset: 0;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 26px;
-          transition: opacity 420ms ease, transform 420ms ease;
-        }
-        .pl-root.exiting .pl-content {
-          opacity: 0;
-          transform: scale(0.92);
+          display: grid;
+          place-items: center;
+          padding: 24px;
+          will-change: transform, opacity;
         }
 
-        /* ---------------------------------------------------------- icon row */
-        .pl-row {
-          display: flex;
-          align-items: center;
-          justify-content: center;
+        /* One lockup: roof, word, ground line. Its size comes from the word. */
+        .pre-lockup {
+          display: inline-block;
+          font-size: clamp(3.4rem, 19vw, 12rem);
         }
 
-        @keyframes plPopIn {
-          0%   { opacity: 0; transform: scale(0.6) rotate(-6deg); }
-          60%  { opacity: 1; transform: scale(1.05) rotate(1.5deg); }
-          100% { opacity: 1; transform: scale(1) rotate(0deg); }
-        }
-        @keyframes plGlow {
-          0%, 100% { opacity: 0.4; transform: translate(-50%, -50%) scale(0.92); }
-          50%      { opacity: 0.8; transform: translate(-50%, -50%) scale(1.12); }
-        }
-        @keyframes plFloat {
-          0%, 100% { transform: translateY(0); }
-          50%      { transform: translateY(-6px); }
-        }
-
-        /* Big on mount, shrinks once .shrink is applied — the shrink, combined
-           with the wordmark box expanding to its right, is what visually
-           carries the icon a little to the left. No hard border/ring shape
-           around it — just a soft brand-blue glow breathing behind it. */
-        .pl-icon-wrap {
-          position: relative;
-          width: 168px;
-          height: 168px;
-          flex: none;
-          transition: width ${REVEAL_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1),
-            height ${REVEAL_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1);
-        }
-        .pl-icon-wrap.shrink {
-          width: 76px;
-          height: 76px;
-          animation: plFloat 3.6s ease-in-out 0.4s infinite;
-        }
-
-        .pl-icon-wrap.shrink::before {
-          content: "";
-          position: absolute;
-          left: 50%;
-          top: 50%;
-          width: 130px;
-          height: 130px;
-          border-radius: 50%;
-          background: radial-gradient(circle, ${BRAND_BLUE}59 0%, transparent 68%);
-          filter: blur(4px);
-          transform: translate(-50%, -50%);
-          animation: plGlow 3.6s ease-in-out infinite;
-          z-index: -1;
-        }
-
-        .pl-icon {
+        .pre-roof {
           display: block;
           width: 100%;
-          height: 100%;
-          border-radius: 22%;
-          object-fit: contain;
-          animation: plPopIn 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
-          box-shadow: 0 16px 36px rgba(8, 14, 26, 0.4);
+          height: 0.5em;
+          overflow: visible;
+        }
+        .pre-roof path {
+          fill: none;
+          stroke: #fff;
+          stroke-width: 2.5;
+          stroke-linejoin: round;
+          stroke-dasharray: 1;
+          stroke-dashoffset: 1; /* fully undrawn until the first paint */
         }
 
-        /* -------------------------------------------------------- wordmark */
-        /* Collapsed to zero width at first so the icon alone sits centred;
-           expands + wipes open once .reveal is applied. White, same as the
-           live navbar logo over the video. */
-        .pl-wordmark-wrap {
-          max-width: 0;
-          margin-left: 0;
-          overflow: hidden;
-          opacity: 0;
-          white-space: nowrap;
-          transition: max-width ${REVEAL_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1),
-            margin-left ${REVEAL_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1),
-            opacity 400ms ease 100ms;
-        }
-        .pl-wordmark-wrap.reveal {
-          max-width: 460px;
-          margin-left: 20px;
-          opacity: 1;
-        }
-
-        .pl-wordmark {
-          display: inline-block;
-          font-family: 'Poppins', system-ui, sans-serif;
-          font-weight: 700;
-          font-size: clamp(2.4rem, 7.5vw, 3.8rem);
-          line-height: 1;
-          letter-spacing: -0.02em;
-          color: ${INK};
-          text-shadow: 0 2px 18px rgba(8, 14, 26, 0.35);
-          /* Curtain wipe: fully clipped from the right at first, opens to 0 */
-          clip-path: inset(0 100% 0 0);
-          transition: clip-path ${REVEAL_DURATION_MS}ms cubic-bezier(0.22, 1, 0.36, 1);
-        }
-        .pl-wordmark-wrap.reveal .pl-wordmark {
-          clip-path: inset(0 0 0 0);
-        }
-
-        /* --------------------------------------------------------- tagline */
-        .pl-tagline-row {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 14px;
-        }
-
-        .pl-rule {
-          height: 1px;
-          width: 0;
-          background: linear-gradient(90deg, transparent, ${BRAND_BLUE}, transparent);
-          transition: width 700ms cubic-bezier(0.22, 1, 0.36, 1) 120ms;
-        }
-        .pl-rule.show { width: 190px; }
-
-        .pl-tagline {
-          font-family: 'Poppins', system-ui, sans-serif;
-          font-weight: 600;
-          font-size: clamp(0.72rem, 2.2vw, 0.92rem);
-          letter-spacing: 0.26em;
-          text-transform: uppercase;
-          color: ${INK_MUTED};
-          opacity: 0;
-          transform: translateY(10px);
-          transition: opacity 600ms ease 220ms, transform 600ms ease 220ms;
+        /* The word is two identical layers: an outline, and a filled copy on
+           top that is revealed from the bottom up as loading advances. */
+        .pre-word {
+          position: relative;
+          display: block;
+          font-family: 'Anton', 'Arial Narrow', sans-serif;
+          font-weight: 400;
+          line-height: 0.95;
+          letter-spacing: 0.02em;
           text-align: center;
+          text-transform: uppercase;
+          white-space: nowrap;
+          user-select: none;
         }
-        .pl-tagline.show { opacity: 1; transform: translateY(0); }
-
-        /* -------------------------------------------------------- progress */
-        .pl-progress {
+        .pre-word-outline {
+          display: block;
+          color: transparent;
+          -webkit-text-stroke: 1px rgba(255, 255, 255, 0.32);
+        }
+        .pre-word-fill {
           position: absolute;
-          bottom: 9vh;
-          left: 50%;
-          transform: translateX(-50%);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 10px;
-        }
-        .pl-track {
-          width: 180px;
-          height: 2px;
-          border-radius: 2px;
-          background: rgba(255, 255, 255, 0.22);
-          overflow: hidden;
-        }
-        .pl-bar {
-          height: 100%;
-          background: ${BRAND_BLUE};
-          border-radius: 2px;
-          transition: width 260ms ease;
-        }
-        .pl-pct {
-          font-family: 'Poppins', system-ui, sans-serif;
-          font-size: 10px;
-          font-weight: 600;
-          letter-spacing: 0.22em;
-          color: ${INK_MUTED};
+          inset: 0;
+          display: block;
+          clip-path: inset(100% 0 0 0);
+          background: linear-gradient(180deg, #ffffff 0%, ${SKY_LIGHT} 100%);
+          -webkit-background-clip: text;
+          background-clip: text;
+          color: transparent;
+          -webkit-text-fill-color: transparent;
         }
 
-        /* Respect users who don't want motion — show the brand, skip the theatre */
-        @media (prefers-reduced-motion: reduce) {
-          .pl-icon, .pl-icon-wrap, .pl-icon-wrap::before, .pl-cloud.a, .pl-cloud.b {
-            animation: none !important;
-          }
-          .pl-icon-wrap, .pl-wordmark-wrap, .pl-wordmark {
-            transition: none !important;
-          }
+        /* The ground line under the house, with the label and the count. */
+        .pre-meta {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 16px;
+          margin-top: clamp(10px, 1.4vw, 18px);
+          padding-top: 12px;
+          border-top: 1px solid rgba(255, 255, 255, 0.22);
+          font: 500 clamp(0.8rem, 1.1vw, 0.95rem)/1.4 'Inter', system-ui, sans-serif;
+          color: rgba(255, 255, 255, 0.78);
+        }
+        .pre-count { font-variant-numeric: tabular-nums; color: #fff; }
+
+        .pre-sr {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          overflow: hidden;
+          clip: rect(0 0 0 0);
+          white-space: nowrap;
         }
       `}</style>
 
-      <div className="pl-panel">
-        <div className="pl-cloud a" />
-        <div className="pl-cloud b" />
-        <div className="pl-glow" />
+      <div ref={panelRef} className="pre-panel">
+        <div ref={contentRef} className="pre-content">
+          <div className="pre-lockup">
+            <svg
+              className="pre-roof"
+              viewBox="0 0 400 80"
+              preserveAspectRatio="xMidYMax meet"
+              aria-hidden="true"
+            >
+              <path ref={roofRef} d="M4 76 L200 6 L396 76" pathLength={1} />
+            </svg>
 
-        <div className="pl-content">
-          <div className="pl-row">
-            <div className={`pl-icon-wrap${settled ? " shrink" : ""}`}>
-              <img className="pl-icon" src={ICON_PATH} alt="" />
+            <div className="pre-word" aria-hidden="true">
+              <span className="pre-word-outline">{WORD}</span>
+              <span ref={fillRef} className="pre-word-fill">
+                {WORD}
+              </span>
             </div>
 
-            <div className={`pl-wordmark-wrap${settled ? " reveal" : ""}`}>
-              <span className="pl-wordmark" aria-label={WORDMARK}>
-                {WORDMARK}
+            <div className="pre-meta" aria-hidden="true">
+              <span>{TAGLINE}</span>
+              <span ref={countRef} className="pre-count">
+                0%
               </span>
             </div>
           </div>
-
-          <div className="pl-tagline-row">
-            <div className={`pl-rule${taglineShown ? " show" : ""}`} />
-            <div className={`pl-tagline${taglineShown ? " show" : ""}`}>{TAGLINE}</div>
-          </div>
-        </div>
-
-        <div className="pl-progress">
-          <div className="pl-track">
-            <div className="pl-bar" style={{ width: `${pct}%` }} />
-          </div>
-          <div className="pl-pct">{pct}%</div>
         </div>
       </div>
+
+      <span className="pre-sr">Loading</span>
     </div>
   );
 }
