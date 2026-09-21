@@ -8,6 +8,8 @@ import Image from "next/image";
 import ProductSectionShowcase from "@/component/ProductSectionShowcase";
 import RoofHeroSection from "@/component/RoofHeroSection";
 import FaqSection from "@/component/FaqSection";
+import CtaSection from "@/component/CtaSection";
+import Footer from "@/component/Footer";
 
 /**
  * OVERLAP_VH — how far up AboutSection is pulled over ScrollVideoReveal, in vh.
@@ -63,6 +65,10 @@ export default function Home() {
       <FrameRevealSection />
 
       <FaqSection/>
+
+      <CtaSection/>
+
+      <Footer/>
 
      
 

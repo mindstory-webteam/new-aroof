@@ -107,9 +107,18 @@ const FRAME_SETS: FrameSet[] = [
 const framePath = (set: FrameSet, i: number) =>
   `${set.folder}/frame_${String(i).padStart(3, "0")}.jpg`;
 
-const watermarkPositionStyle: React.CSSProperties = (() => {
+// Kept as a standalone function that takes the position as a PARAMETER, rather
+// than an IIFE closing over the module-level WATERMARK_POSITION constant.
+// TypeScript narrows a `const` to its literal type within the scope where it's
+// read, so a switch over the module-level const directly inside a same-scope
+// IIFE was treating every case after the first as unreachable/incompatible
+// with that narrowed literal. A function parameter isn't narrowed that way,
+// so the switch below type-checks correctly against the full union.
+function getWatermarkPositionStyle(
+  position: "top-left" | "top-right" | "bottom-left" | "bottom-right"
+): React.CSSProperties {
   const offset = "4vw";
-  switch (WATERMARK_POSITION) {
+  switch (position) {
     case "top-left":
       return { top: offset, left: offset };
     case "top-right":
@@ -120,7 +129,11 @@ const watermarkPositionStyle: React.CSSProperties = (() => {
     default:
       return { bottom: offset, right: offset };
   }
-})();
+}
+
+const watermarkPositionStyle: React.CSSProperties = getWatermarkPositionStyle(
+  WATERMARK_POSITION
+);
 
 export default function ScrollVideoReveal() {
   const sectionRef = useRef<HTMLDivElement>(null);

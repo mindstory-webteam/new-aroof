@@ -251,11 +251,18 @@ export default function FrameRevealSection() {
   useLayoutEffect(() => {
     if (!loaded) return;
 
-    const containers = [
-      leftTitleRef.current,
-      rightCopyRef.current,
-      bottomRightRef.current,
-    ].filter((el): el is HTMLElement => !!el);
+    // The three refs are typed as HTMLHeadingElement | HTMLParagraphElement | null,
+    // which are sibling types (neither a subtype of the other). A type predicate
+    // can only narrow a parameter to a MORE specific type than it's declared as,
+    // so predicating straight down to `HTMLElement` (a supertype of both) is
+    // rejected by the compiler. Casting the array to `(HTMLElement | null)[]`
+    // first gives the predicate a parameter type it's actually allowed to narrow.
+    const containers = (
+      [leftTitleRef.current, rightCopyRef.current, bottomRightRef.current] as (
+        | HTMLElement
+        | null
+      )[]
+    ).filter((el): el is HTMLElement => el !== null);
 
     const words = containers.flatMap((el) =>
       Array.from(el.querySelectorAll<HTMLElement>(".reveal-word"))

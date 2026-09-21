@@ -6,56 +6,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
-/**
- * RoofHeroSection — sky video, ghosted heading, cut-out house, key line
- * ---------------------------------------------------------------------
- *
- *   ┌───────────────────────── full bleed, 100svh ─────────────────────────┐
- *   │                    (sky video plays behind everything)                │
- *   │                                                                       │
- *   │            R O O F I N G      ← translucent word in the sky           │
- *   │                 ╱‾‾‾‾‾‾‾‾‾╲     (the roof peak overlaps it)          │
- *   │           ╱‾‾‾‾╱  ▯▯  ▯▯   ╲‾‾‾‾╲                                    │
- *   │        ╱‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾╲     ← cut-out house PNG         │
- *   │  small line of copy    A ROOF THAT                                    │
- *   │  (bottom left)         OUTLASTS EVERY MONSOON   ← on a dark fade      │
- *   └───────────────────────────────────────────────────────────────────────┘
- *
- * No navbar and no buttons — just the scene and the headline.
- *
- * LAYERS, BOTTOM TO TOP
- * ---------------------
- * 1. Sky video (`.roof-sky`), with a flat blue behind it while it loads.
- * 2. Ghost word. A gradient clipped to the text, so it reads as frosted glass
- *    that fades toward the bottom of each letter.
- * 3. The house, a transparent PNG, wide enough to run off both edges.
- * 4. A dark fade rising from the bottom edge, so the roof melts into the
- *    ground and the headline is always legible.
- * 5. The copy.
- *
- * MOTION
- * ------
- * One entrance: the ghost word settles, the house rises, the headline pushes
- * up out of its mask, the small line fades in. After that, only the cursor
- * moves anything: the house drifts a little and the ghost word drifts the
- * opposite way, which is what gives the scene depth. Both are skipped for
- * touch devices and prefers-reduced-motion.
- *
- * BACKGROUND VIDEO
- * ----------------
- * Driven from JS for the same reasons as the product section: `muted` has to
- * be a DOM property before play(), play() can reject, and a wrong path fails
- * silently. The bundled sky-hero.mp4 is 1080p and loops seamlessly (its last
- * second cross-fades into its first).
- *
- * SETUP
- * -----
- * 1. `npm i gsap`
- * 2. Copy `sky-hero.mp4` to `public/video/` and `roof-house.png` to
- *    `public/images/`, or change the two paths below.
- * 3. Edit the words in the Content block.
- * 4. Move the font @import to your global stylesheet for production.
- */
+
 
 /* ── Content ─────────────────────────────────────────────────────────────── */
 
@@ -94,6 +45,19 @@ const DRIFT_DURATION = 1.1;
 
 const PAD_X = "clamp(24px, 5vw, 96px)";
 const PAD_BOTTOM = "clamp(28px, 4vw, 64px)";
+
+// House size, as a share of the section width. 100% = edge to edge.
+// Smaller number = smaller house, larger number = cropped at both sides.
+const HOUSE_WIDTH = "100%"; // desktop and tablet
+const HOUSE_WIDTH_MOBILE = "140%"; // screens 900px wide and under
+
+// How far the house sits above the bottom edge, as a share of the section
+// height. 0% = resting on the bottom. Raise it to lift the house higher.
+const HOUSE_LIFT = "3%";
+
+// Where the ghost word sits from the top. Raise it to move the word lower.
+const GHOST_TOP = "9%";
+const GHOST_TOP_MOBILE = "12%";
 
 const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
@@ -228,7 +192,7 @@ export default function RoofHeroSection() {
         @import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;500&display=swap');
 
         .roof {
-          --house-w: 104vw;
+          --house-w: ${HOUSE_WIDTH};
           position: relative;
           box-sizing: border-box;
           width: 100%;
@@ -267,7 +231,7 @@ export default function RoofHeroSection() {
           position: absolute;
           left: 0;
           right: 0;
-          top: 9%;
+          top: ${GHOST_TOP};
           z-index: 1;
           text-align: center;
           pointer-events: none;
@@ -301,7 +265,7 @@ export default function RoofHeroSection() {
            transform, so the cursor drift owns the only transform on it. */
         .roof-house-drift {
           position: absolute;
-          bottom: 0;
+          bottom: ${HOUSE_LIFT};
           left: 50%;
           width: var(--house-w);
           margin-left: calc(var(--house-w) / -2);
@@ -376,11 +340,11 @@ export default function RoofHeroSection() {
           color: rgba(255, 255, 255, 0.7);
         }
 
-        /* ---- Small screens: the sky gets taller, so the house grows to
-           stay the hero of the scene, and the copy stacks under the line. ---- */
+        /* ---- Small screens: the sky gets taller, so the house is sized up
+           to stay the hero of the scene, and the copy stacks under the line. ---- */
         @media (max-width: 900px) {
-          .roof { --house-w: 190vw; }
-          .roof-ghost-drift { top: 12%; }
+          .roof { --house-w: ${HOUSE_WIDTH_MOBILE}; }
+          .roof-ghost-drift { top: ${GHOST_TOP_MOBILE}; }
           .roof-copy { flex-direction: column-reverse; align-items: flex-start; gap: 14px; }
           .roof-tag { max-width: 34ch; margin: 0; }
           .roof-fade {
