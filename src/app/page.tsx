@@ -10,6 +10,7 @@ import RoofHeroSection from "@/component/RoofHeroSection";
 import FaqSection from "@/component/FaqSection";
 import CtaSection from "@/component/CtaSection";
 import Footer from "@/component/Footer";
+import WhyChooseSection from "@/component/WhyChooseSection";
 
 /**
  * OVERLAP_VH — how far up AboutSection is pulled over ScrollVideoReveal, in vh.
@@ -61,8 +62,11 @@ export default function Home() {
 
       
        <ProductSectionShowcase/>
+        <WhyChooseSection/>
 
       <FrameRevealSection />
+
+     
 
       <FaqSection/>
 

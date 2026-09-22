@@ -22,10 +22,9 @@ const PRODUCTS = [
       { label: "Interlocking side lap", x: 22, y: 82 },
     ],
     colors: [
-      { id: "terracotta", label: "Terracotta", hex: "#8a4a34", src: "/images/pro-images/p-p-1.png" },
-      { id: "charcoal", label: "Charcoal", hex: "#33383c", src: "/images/pro-images/p-1-2.png" },
-      { id: "forest", label: "Forest", hex: "#3c5a45", src: "/images/pro-images/p-1-3.png" },
-      { id: "slate", label: "Slate", hex: "#5c6b75", src: "/images/pro-images/p-1-4.png" },
+      { id: "terracotta", label: "Brick", hex: "#633321", src: "/images/sheet-colors/title/red.png" },
+    
+      { id: "slate", label: "Graphite", hex: "#4c5255", src: "/images/sheet-colors/title/sliver.png" },
     ],
   },
   {
@@ -42,10 +41,10 @@ const PRODUCTS = [
       { label: "Anti-corrosive base", x: 25, y: 84 },
     ],
     colors: [
-      { id: "brick", label: "Brick", hex: "#7a3b2a", src: "/images/pro-images/p-p-2.png" },
-      { id: "graphite", label: "Graphite", hex: "#3a3f42", src: "/images/pro-images/p-2-2.png" },
-      { id: "olive", label: "Olive", hex: "#5a5b3a", src: "/images/pro-images/p-2-3.png" },
-      { id: "stone", label: "Stone", hex: "#8b8478", src: "/images/pro-images/p-2-4.png" },
+      { id: "brick", label: "Brick", hex: "#633321", src: "/images/sheet-colors/upvc/red.png" },
+      { id: "graphite", label: "Graphite", hex: "#4c5255", src: "/images/sheet-colors/upvc/sliver.png" },
+      { id: "olive", label: "White", hex: "#ffff", src: "/images/sheet-colors/upvc/white.png" },
+      
     ],
   },
 ];

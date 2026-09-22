@@ -6,63 +6,6 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 
 gsap.registerPlugin(ScrollTrigger);
 
-/**
- * AboutSectionLedger — anchored portrait, narrative column, spec ledger
- * ---------------------------------------------------------------------
- *
- *   ┌──────────────────────────────────────────────────────────┐
- *   │  ABOUT US ✦ ──────────────────────────────  Since 1984   │
- *   │                                                          │
- *   │  ┌────────────────┐    lead line, rises word by word     │
- *   │  │                │                                      │
- *   │  │    portrait    │    body paragraph                    │
- *   │  │    (sticky)    │                                      │
- *   │  │                │    body paragraph                    │
- *   │  │        ┌───────┼──┐                                   │
- *   │  │        │ inset │  │   42        0.47        14        │
- *   │  └────────┴───────┘  │   years     mm gauge    districts │
- *   │                                                          │
- *   │  ▤ ▤ ▤ ▤ ▤ ▤ ▤  slow drifting detail strip               │
- *   └──────────────────────────────────────────────────────────┘
- *
- * HOW THIS DIFFERS FROM THE VIDEO-RAIL VERSION
- * --------------------------------------------
- * - The alternating photo/copy rows are replaced by one anchored portrait that
- *   stays put while the narrative column scrolls past it. The section reads as
- *   a single held image with text moving against it, instead of two symmetrical
- *   halves repeated twice.
- * - A small inset photo breaks the portrait's bottom-right corner. That overlap
- *   is the one deliberately loud move in the layout; everything else stays flat
- *   and quiet so it keeps its weight.
- * - The video rails are gone. In their place is a low detail strip at the
- *   bottom that drifts sideways forever — enough life at the edges without
- *   putting moving footage beside body copy.
- * - Figures are real specification data (gauge, years, districts), so they earn
- *   their rules. They count up once when reached.
- * - The heading treatment is carried over untouched: Anton, animated gradient
- *   clipped to the text, mask push-up, star, and the rule running to the meta.
- *
- * THE REVEAL SYSTEM
- * -----------------
- * One vocabulary, applied consistently rather than a different effect per
- * element:
- *   text      → masked rise from below its own baseline (heading, lead, figures)
- *   images    → a clip wipe that opens the frame, with the picture settling out
- *               of a slight zoom behind it
- *   rules     → scaleX draw from the anchored edge
- *   body copy → the quietest one, a short fade up, so it never competes
- * Everything fires once. Nothing re-runs on scroll back.
- *
- * SETUP
- * -----
- * 1. `npm i gsap`
- * 2. Fill PORTRAIT_IMAGES, INSET_IMAGE and STRIP_IMAGES.
- * 3. Move the font @import to your global stylesheet for production.
- * 4. Note this section uses `overflow-x: clip`, not `overflow: hidden` — the
- *    latter on an ancestor silently kills `position: sticky`.
- */
-
-/* ── Content ─────────────────────────────────────────────────────────────── */
 
 const HEADING = "About Us";
 const META = "Since 1984";
